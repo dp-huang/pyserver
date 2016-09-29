@@ -25,24 +25,44 @@ try:
 except ImportError:
     from StringIO import StringIO
 
-SERVER_PORT = 3005
+SERVER_PORT = 8080
 encoding_type = 'gzip'
+index_page = 'index.html'
+directory_access = 'False'
 
 
 def parse_options():
+
+    global encoding_type
+    global SERVER_PORT
+    global index_page
+    global directory_access
+
     # Option parsing logic.
     parser = OptionParser()
+
     parser.add_option("-e", "--encoding", dest="encoding_type",
-                      help="Encoding type for server to utilize",
+                      help="encoding type for server to utilize",
                       metavar="ENCODING", default='gzip')
-    global SERVER_PORT
+
     parser.add_option("-p", "--port", dest="port", default=SERVER_PORT,
-                      help="The port to serve the files on",
-                      metavar="ENCODING")
+                      help="the port to serve the files on",
+                      metavar="PORT")
+
+    parser.add_option("-i", "--index", dest="index", default=index_page,
+                      help="the index file page",
+                      metavar="INDEX")
+
+    parser.add_option("-d", "--directory access", dest="directory_access", default=directory_access,
+                      help="access directory or not",
+                      metavar="DIRECTORY")
+
     (options, args) = parser.parse_args()
-    global encoding_type
+
     encoding_type = options.encoding_type
     SERVER_PORT = int(options.port)
+    index_page = options.index
+    directory_access = options.directory_access.lower() == 'true'
 
     if encoding_type not in ['zlib', 'deflate', 'gzip']:
         sys.stderr.write("Please provide a valid encoding_type for the server to utilize.\n")
@@ -101,8 +121,7 @@ class SimpleHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         path = self.translate_path(self.path)
         print("Serving path '%s'" % path)
         if not os.path.exists(path):
-            path = 'index.html'
-        
+            path = index_page
         f = None
         if os.path.isdir(path):
             if not self.path.endswith('/'):
@@ -111,14 +130,16 @@ class SimpleHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 self.send_header("Location", self.path + "/")
                 self.end_headers()
                 return None
-            for index in "index.html", "index.htm":
+            for index in [index_page]:
                 index = os.path.join(path, index)
                 if os.path.exists(index):
                     path = index
                     break
             else:
-                self.send_response(401)
-                # return self.list_directory(path).read()
+                if directory_access:
+                    return self.list_directory(path).read()
+                else:
+                    self.send_response(401)
 
         ctype = self.guess_type(path)
         try:
@@ -257,7 +278,7 @@ def test(HandlerClass = SimpleHTTPRequestHandler,
     httpd = BaseHTTPServer.HTTPServer(server_address, SimpleHTTPRequestHandler)
 
     sa = httpd.socket.getsockname()
-    print "Serving HTTP on", sa[0], "port", sa[1], "..."
+    print "Serving HTTP on", sa[0], "port", sa[1], "page", index_page, "directory_access", directory_access, "..."
     httpd.serve_forever()
     BaseHTTPServer.test(HandlerClass, ServerClass)
 
